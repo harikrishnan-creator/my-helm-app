@@ -1,5 +1,5 @@
 apiVersion: v2
-name: my-hel-app
+name: my-helm-app
 description: A Helm chart for practicing deployments
 type: application
 version: 0.1.0
