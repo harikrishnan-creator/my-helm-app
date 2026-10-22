@@ -1,16 +1,24 @@
 # my-helm-app
 
-This repository is a simple Helm chart used to learn how to containerize an application and deploy it on Kubernetes using Helm. It demonstrates the basic structure of a Helm chart, how values are parameterized, and how Kubernetes resources such as a Deployment and a Service are created from templates.
+This repository contains a simple Helm chart for deploying a containerized application on Kubernetes. The project was created to learn Helm basics, Kubernetes resource templating, and how to expose an app through an Ingress controller.
+
+The current chart reflects the latest project changes, including:
+
+- a custom application image (`app:latest`)
+- a Kubernetes `Service` using `ClusterIP`
+- an enabled `Ingress` resource using the NGINX Ingress class
+- optional autoscaling configuration in `values.yaml`
 
 ## What this project does
 
-The chart deploys a basic Nginx web application on a Kubernetes cluster. It creates:
+The chart deploys a basic application on a Kubernetes cluster and creates:
 
-- a Deployment with 2 replicas by default
-- a Service exposing the app on a NodePort
-- a configurable image and port setup via `values.yaml`
+- a Deployment with a configurable replica count
+- a Service that routes traffic to the app pods
+- an Ingress rule for external access through NGINX
+- optional autoscaling values for future scaling scenarios
 
-This repo is intentionally minimal and is designed for learning and practice rather than production deployment.
+This repo is intended for learning and practice rather than production-ready deployment.
 
 ## Project structure
 
@@ -21,13 +29,16 @@ my-helm-app/
 ├── .helmignore
 ├── templates/
 │   ├── deployment.yaml
-│   └── service.yaml
-└── README.md
+│   ├── service.yaml
+│   └── ingress.yaml
+├── README.md
+└── .values.yaml.swp   # temporary file created by editor, should not be committed
 ```
 
-### File explanations
+## Chart files
 
-#### `Chart.yaml`
+### `Chart.yaml`
+
 This file defines the Helm chart metadata.
 
 ```yaml
@@ -39,60 +50,127 @@ version: 0.1.0
 appVersion: "1.0.0"
 ```
 
-It tells Helm:
+### `values.yaml`
 
-- the chart name is `my-helm-app`
-- the chart version is `0.1.0`
-- the application version is `1.0.0`
-
-#### `values.yaml`
-This stores default configuration values used by the templates.
+This file stores the default chart configuration.
 
 ```yaml
 replicaCount: 2
 
 image:
-  repository: nginx
+  repository: app
   tag: "latest"
   pullPolicy: IfNotPresent
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 80
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: myapp.local
+      paths:
+        - path: /
+          pathType: Prefix
 ```
 
 These values control:
 
-- how many pods should run (`replicaCount`)
-- which container image to use (`nginx:latest`)
-- the type of Kubernetes Service (`NodePort`)
-- the exposed application port (`80`)
+- the number of pods (`replicaCount`)
+- the app image and tag (`image.repository`, `image.tag`)
+- the type of Service used (`ClusterIP` for Ingress-based routing)
+- whether Ingress is enabled (`ingress.enabled`)
+- the host and path used by the Ingress rule
 
-#### `templates/deployment.yaml`
-This template creates a Kubernetes Deployment.
+### `templates/deployment.yaml`
 
-It uses:
+This template creates the Kubernetes Deployment.
 
-- `{{ .Release.Name }}` to name resources based on the Helm release
-- `{{ .Values.replicaCount }}` to define pod replicas
-- `{{ .Values.image.repository }}:{{ .Values.image.tag }}` to build the container image
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-deployment
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 80
+```
 
-The deployment runs the Nginx container and exposes port `80`.
+### `templates/service.yaml`
 
-#### `templates/service.yaml`
-This template creates a Kubernetes Service for the app.
+This template creates the Kubernetes Service.
 
-It selects the pods using the label `app: {{ .Release.Name }}` and exposes the Service on port `80`, targeting the container port `80`.
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-service
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 80
+```
+
+### `templates/ingress.yaml`
+
+This template creates the Ingress resource used to expose the app externally.
+
+```yaml
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-service
+                port:
+                  number: 80
+{{- end }}
+```
 
 ## Prerequisites
 
-Before using this chart, make sure you have:
+Before using this chart, ensure you have:
 
 - a Kubernetes cluster running
-- `kubectl` installed and configured to connect to the cluster
+- `kubectl` installed and configured
 - Helm 3 installed
+- an Ingress controller such as NGINX Ingress installed in the cluster
 
-To check installation:
+To confirm your tools are available:
 
 ```bash
 kubectl version --client
@@ -114,23 +192,19 @@ cd my-helm-app
 helm lint .
 ```
 
-This checks for syntax issues and common chart problems.
-
-### 3. Render the Kubernetes manifests
+### 3. Render the manifests
 
 ```bash
 helm template my-helm-app .
 ```
 
-This prints the YAML that Helm would apply without actually deploying anything.
-
-### 4. Install the Helm chart
+### 4. Install the chart
 
 ```bash
 helm install my-helm-app .
 ```
 
-If you want to install into a specific namespace:
+If you want to install in a specific namespace:
 
 ```bash
 helm install my-helm-app . --namespace default
@@ -142,37 +216,26 @@ helm install my-helm-app . --namespace default
 kubectl get deployment
 kubectl get pods
 kubectl get service
+kubectl get ingress
 ```
-
-You should see:
-
-- a Deployment named like `my-helm-app-deployment`
-- pods created from the Nginx image
-- a Service named like `my-helm-app-service`
 
 ## Accessing the application
 
-Since the Service type is set to `NodePort`, you can access it using the cluster node IP and the assigned NodePort.
+Because the chart enables Ingress, the app can be accessed through the configured host.
 
-Check the service port:
-
-```bash
-kubectl get svc
-```
-
-Example:
-
-```bash
-kubectl get svc my-helm-app-service
-```
-
-Then open the app in a browser using:
+For example, if `ingress.host` is set to `myapp.local`, add it to your `/etc/hosts` file or use a local DNS setup:
 
 ```text
-http://<NodeIP>:<NodePort>
+127.0.0.1 myapp.local
 ```
 
-If you are running locally with a cluster that supports port forwarding, you can also do:
+Then open:
+
+```text
+http://myapp.local
+```
+
+If you prefer port forwarding instead:
 
 ```bash
 kubectl port-forward svc/my-helm-app-service 8080:80
@@ -186,20 +249,20 @@ http://localhost:8080
 
 ## Updating values
 
-If you want to change the deployment behavior, edit `values.yaml`.
+Edit `values.yaml` to adjust the characteristics of the deployment.
 
-For example, to increase replicas:
+Example: increase replicas:
 
 ```yaml
 replicaCount: 3
 ```
 
-To change the image:
+Example: change the image:
 
 ```yaml
 image:
-  repository: nginx
-  tag: "1.25.4"
+  repository: app
+  tag: "1.0.0"
 ```
 
 Then upgrade the release:
@@ -207,6 +270,20 @@ Then upgrade the release:
 ```bash
 helm upgrade my-helm-app .
 ```
+
+## Autoscaling setup
+
+The chart includes autoscaling values for future use:
+
+```yaml
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+```
+
+These values are ready to be used if you add a HorizontalPodAutoscaler template later.
 
 ## Uninstall
 
@@ -218,11 +295,11 @@ helm uninstall my-helm-app
 
 ## Summary
 
-This project is a basic Helm learning example that shows:
+This project demonstrates:
 
-- how to package an application as a Helm chart
-- how to use `values.yaml` for configuration
-- how Kubernetes Deployment and Service resources are created from templates
-- how to install, upgrade, and uninstall an app on Kubernetes using Helm
+- how Helm charts package application resources
+- how to define deployment, service, and ingress settings in values
+- how to expose application traffic using Kubernetes Ingress
+- how to manage a basic Helm deployment workflow for learning and practice
 
-This repo is a good starting point for anyone learning Helm basics and Kubernetes deployment workflows.
+This repository is a good starting point for learning Helm, Kubernetes manifests, and HTTP traffic routing in a cluster.
