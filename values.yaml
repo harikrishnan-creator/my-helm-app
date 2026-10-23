@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: app
+  repository: nginx
   tag: "latest"
   pullPolicy: IfNotPresent
 
