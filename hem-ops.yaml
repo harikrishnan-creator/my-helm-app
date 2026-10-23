@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/harikrishnan-creator/my-helm-app.git
     targetRevision: main
-    path: my-helm-app/Chart.yaml
+    path: .
     helm:
       values: values.yaml
   destination:
