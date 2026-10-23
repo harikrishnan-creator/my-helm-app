@@ -1,6 +1,8 @@
 # my-helm-app
 
-This repository contains a simple Helm chart for deploying a containerized application on Kubernetes. The project was created to learn Helm basics, Kubernetes resource templating, and how to expose applications through an Ingress resource.
+This repository contains a simple Helm chart for deploying a containerized application on Kubernetes. The project was created to learn Helm basics, Kubernetes resource templating, and how to expose applications through Ingress.
+
+It also includes a GitOps manifest, `hem-ops.yaml`, which defines an ArgoCD Application for deploying this chart directly from the Git repository.
 
 Latest commit: `91285e485376f311b0fad6a423e5f4369907eb3a` — `Update replicaCount from 2 to 5`
 
@@ -29,6 +31,7 @@ This repo is intended for learning and practice rather than production-ready dep
 my-helm-app/
 ├── Chart.yaml
 ├── values.yaml
+├── hem-ops.yaml
 ├── .helmignore
 ├── templates/
 │   ├── deployment.yaml
@@ -172,6 +175,7 @@ Before using this chart, ensure you have:
 - `kubectl` installed and configured
 - Helm 3 installed
 - an Ingress controller such as NGINX Ingress installed in the cluster
+- ArgoCD installed if you want to use the GitOps deployment flow (`hem-ops.yaml`)
 
 To confirm your tools are available:
 
@@ -179,6 +183,63 @@ To confirm your tools are available:
 kubectl version --client
 helm version
 ```
+
+## GitOps with ArgoCD
+
+This repository includes an ArgoCD Application manifest in `hem-ops.yaml` to deploy the Helm chart using GitOps. The manifest tells ArgoCD to monitor the Git repository, sync the chart into the cluster, and automatically reconcile configuration changes.
+
+The ArgoCD application definition includes:
+
+- `apiVersion: argoproj.io/v1alpha1`
+- `kind: Application`
+- `metadata.name: my-helm-app`
+- `metadata.namespace: argocd`
+- `source.repoURL: https://github.com/harikrishnan-creator/my-helm-app.git`
+- `targetRevision: main`
+- `path: .`
+- `destination.server: https://kubernetes.default.svc`
+- `destination.namespace: default`
+- `syncPolicy.automated.prune: true`
+- `syncPolicy.automated.selfHeal: true`
+
+### Steps to deploy through ArgoCD
+
+1. Install ArgoCD in your cluster if it is not already installed.
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+2. Access the ArgoCD UI or use `argocd` CLI to login.
+
+3. Apply the GitOps manifest from this repository:
+
+```bash
+kubectl apply -f hem-ops.yaml -n argocd
+```
+
+4. In the ArgoCD UI, the `my-helm-app` application should appear automatically.
+
+5. Click Sync to initiate the deployment, or let the automated policy handle it.
+
+6. ArgoCD will continuously track the Git repository and apply updates to the cluster.
+
+### Verify the ArgoCD deployment
+
+```bash
+kubectl get application -n argocd
+kubectl get pods -n default
+kubectl get svc -n default
+```
+
+You can also inspect the application from the ArgoCD UI or with the CLI:
+
+```bash
+argocd app get my-helm-app -n argocd
+```
+
+This GitOps flow is useful when you want the cluster state to match the Git repository automatically.
 
 ## Setup and deployment
 
@@ -274,6 +335,8 @@ Then upgrade the release:
 helm upgrade my-helm-app .
 ```
 
+When using ArgoCD, changes pushed to Git are automatically reconciled by ArgoCD, so you don't need to manually run `helm upgrade` unless you are performing a direct cluster-side Helm deployment.
+
 ## Autoscaling setup
 
 The chart includes autoscaling values for future use:
@@ -296,6 +359,12 @@ To remove the release from the cluster:
 helm uninstall my-helm-app
 ```
 
+If using ArgoCD, you can also remove the application from ArgoCD:
+
+```bash
+kubectl delete -f hem-ops.yaml -n argocd
+```
+
 ## Summary
 
 This project demonstrates:
@@ -304,5 +373,6 @@ This project demonstrates:
 - how to define deployment, service, and ingress settings in values
 - how to expose application traffic using Kubernetes Ingress
 - how to manage a basic Helm deployment workflow for learning and practice
+- how to use ArgoCD GitOps to sync the repository to Kubernetes automatically
 
-This repository is a good starting point for learning Helm, Kubernetes manifests, and HTTP traffic routing in a cluster.
+This repository is a good starting point for learning Helm, Kubernetes manifests, Ingress routing, and GitOps automation with ArgoCD.
