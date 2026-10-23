@@ -9,8 +9,8 @@ spec:
     repoURL: https://github.com/harikrishnan-creator/my-helm-app.git
     targetRevision: main
     path: .
-    helm:
-      values: values.yaml
+#    helm:
+#      values: values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: default
