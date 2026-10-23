@@ -1,10 +1,13 @@
 # my-helm-app
 
-This repository contains a simple Helm chart for deploying a containerized application on Kubernetes. The project was created to learn Helm basics, Kubernetes resource templating, and how to expose an app through an Ingress controller.
+This repository contains a simple Helm chart for deploying a containerized application on Kubernetes. The project was created to learn Helm basics, Kubernetes resource templating, and how to expose applications through an Ingress resource.
+
+Latest commit: `91285e485376f311b0fad6a423e5f4369907eb3a` — `Update replicaCount from 2 to 5`
 
 The current chart reflects the latest project changes, including:
 
-- a custom application image (`app:latest`)
+- a Kubernetes deployment scaled to 5 replicas
+- a base NGINX image (`nginx:latest`)
 - a Kubernetes `Service` using `ClusterIP`
 - an enabled `Ingress` resource using the NGINX Ingress class
 - optional autoscaling configuration in `values.yaml`
@@ -55,15 +58,15 @@ appVersion: "1.0.0"
 This file stores the default chart configuration.
 
 ```yaml
-replicaCount: 2
+replicaCount: 5
 
 image:
-  repository: app
+  repository: nginx
   tag: "latest"
   pullPolicy: IfNotPresent
 
 service:
-  type: ClusterIP
+  type: ClusterIP   # use ClusterIP when exposing via Ingress
   port: 80
 
 autoscaling:
@@ -254,15 +257,15 @@ Edit `values.yaml` to adjust the characteristics of the deployment.
 Example: increase replicas:
 
 ```yaml
-replicaCount: 3
+replicaCount: 5
 ```
 
 Example: change the image:
 
 ```yaml
 image:
-  repository: app
-  tag: "1.0.0"
+  repository: nginx
+  tag: "latest"
 ```
 
 Then upgrade the release:
